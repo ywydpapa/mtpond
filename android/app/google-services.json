@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "647625981255",
+    "project_id": "mtpond-77852",
+    "storage_bucket": "mtpond-77852.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:647625981255:android:730070f3154fedeb932062",
+        "android_client_info": {
+          "package_name": "kr.swcore.mtpond"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAeqgAwxgSbHqN81i_12g_Ydflf2vKxSqU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

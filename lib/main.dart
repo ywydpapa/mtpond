@@ -1,32 +1,138 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:mtpond/tradeset.dart';
+import 'package:in_app_update/in_app_update.dart';
+import 'tradeset.dart';
 import 'dart:convert';
 import 'config/api_config.dart';
 import 'dart:io';
 import 'package:flutter/services.dart'; // 추가
 import 'hotcoins.dart';
 import 'tradelogs.dart';
-import 'hotcoins.dart';
 import 'setting.dart';
 import 'margins.dart';
 import 'losscut.dart';
+import 'package:flutter/services.dart'; // 추가
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-void main() {
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+}
+
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+FlutterLocalNotificationsPlugin();
+
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  HttpOverrides.global = MyHttpOverrides(); //테스트용 우회 설정
+  print('앱 시작!');
 
-  // 시스템 바를 투명하게 만들고 아이콘 색상을 지정 (edge-to-edge 대응)
-  SystemChrome.setSystemUIOverlayStyle(
-    SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      systemNavigationBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
-      systemNavigationBarIconBrightness: Brightness.dark,
-    ),
-  );
+  // Firebase 초기화
+  try {
+    await Firebase.initializeApp();
+    print('Firebase 초기화 성공');
+  } catch (e, stack) {
+    print('Firebase 초기화 실패: $e\n$stack');
+  }
 
+  // FCM 백그라운드 핸들러 등록
+  try {
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    print('FCM 백그라운드 핸들러 등록 완료');
+  } catch (e, stack) {
+    print('FCM 핸들러 등록 실패: $e\n$stack');
+  }
+
+  // HttpOverrides 설정
+  try {
+    HttpOverrides.global = MyHttpOverrides();
+    print('HttpOverrides 설정 완료');
+  } catch (e, stack) {
+    print('HttpOverrides 설정 실패: $e\n$stack');
+  }
+
+  // FCM 권한 요청
+  try {
+    FirebaseMessaging messaging = FirebaseMessaging.instance;
+    NotificationSettings settings = await messaging.requestPermission();
+    print('FCM 권한 요청 완료: ${settings.authorizationStatus}');
+  } catch (e, stack) {
+    print('FCM 권한 요청 실패: $e\n$stack');
+  }
+
+  // 시스템 UI 스타일 설정
+  try {
+    SystemChrome.setSystemUIOverlayStyle(
+      SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+    );
+    print('System UI 스타일 설정 완료');
+  } catch (e, stack) {
+    print('System UI 스타일 설정 실패: $e\n$stack');
+  }
+
+  // 로컬 알림 초기화
+  try {
+    const AndroidInitializationSettings initializationSettingsAndroid =
+    AndroidInitializationSettings('@mipmap/ic_launcher');
+    final DarwinInitializationSettings initializationSettingsIOS =
+    DarwinInitializationSettings();
+
+    final InitializationSettings initializationSettings = InitializationSettings(
+      android: initializationSettingsAndroid,
+      iOS: initializationSettingsIOS,
+    );
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+    print('로컬 알림 초기화 완료');
+  } catch (e, stack) {
+    print('로컬 알림 초기화 실패: $e\n$stack');
+  }
+
+  print('runApp 호출');
   runApp(MyApp());
+}
+
+
+void subscribeToTopics(String regionNo, String clubNo) async {
+  FirebaseMessaging messaging = FirebaseMessaging.instance;
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+
+  final regionTopic = 'region_$regionNo';
+  final clubTopic = 'club_$clubNo';
+  // 이전 클럽 토픽 구독 해제
+  String? prevClubNo = prefs.getString('prevClubNo');
+  if (prevClubNo != null && prevClubNo != clubNo) {
+    await messaging.unsubscribeFromTopic('club_$prevClubNo');
+  }
+  // 새 클럽 토픽 구독
+  await messaging.subscribeToTopic(clubTopic);
+  await messaging.subscribeToTopic(regionTopic);
+  // 새 클럽 토픽 저장
+  await prefs.setString('prevClubNo', clubNo);
+}
+
+void unsubscribeAllTopics() async {
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  String? prevClubNo = prefs.getString('prevClubNo');
+  String? prevRegionNo = prefs.getString('prevRegionNo');
+  FirebaseMessaging messaging = FirebaseMessaging.instance;
+
+  if (prevClubNo != null) {
+    await messaging.unsubscribeFromTopic('club_$prevClubNo');
+  }
+  if (prevRegionNo != null) {
+    await messaging.unsubscribeFromTopic('region_$prevRegionNo');
+  }
+  // 저장값 초기화
+  await prefs.remove('prevClubNo');
+  await prefs.remove('prevRegionNo');
 }
 
 class MyHttpOverrides extends HttpOverrides {
@@ -52,7 +158,7 @@ class MyApp extends StatelessWidget {
         '/setting': (context) => SettingPage(),     // 예시: 트레이딩 설정목록
         '/tradelogs': (context) => TradeLogsPage(),// 예시: 거래 내역
         '/hotcoins': (context) => HotCoinsPage(),      // 예시: 추천 종목
-        '/tradeset': (context) => TradesetPage(),
+        '/tradeset': (context) => TradeSetPage(),
         '/margins': (context) => MarginsPage(),      // 설정
         '/losscut': (context) => LosscutPage(),      // 설정// 설정
       },
@@ -104,6 +210,7 @@ class _LoginScreenState extends State<LoginScreen> {
             _errorMessage = '';
           });
 
+
           Navigator.pushReplacementNamed(
             context,
             '/',
@@ -150,7 +257,7 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               SizedBox(height: 20),
               Image.asset(
-                'assets/default.png',
+                'assets/mtPond.png',
                 width: 300,
                 height: 300,
               ),
@@ -161,7 +268,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   labelText: '등록된 아이디/전화번호',
                   border: OutlineInputBorder(),
                 ),
-                keyboardType: TextInputType.phone,
+                keyboardType: TextInputType.text,
               ),
               SizedBox(height: 8),
               TextField(
@@ -171,7 +278,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   border: OutlineInputBorder(),
                 ),
                 obscureText: true, // <-- 추가!
-                keyboardType: TextInputType.phone,
+                keyboardType: TextInputType.text,
               ),
               SizedBox(height: 8),
               if (_errorMessage.isNotEmpty)
@@ -186,8 +293,44 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+
+  @override
+  void initState() {
+    super.initState();
+    _checkForFlexibleUpdate();
+  }
+
+  Future<void> _checkForUpdate() async {
+    try {
+      final updateInfo = await InAppUpdate.checkForUpdate();
+      if (updateInfo.updateAvailability == UpdateAvailability.updateAvailable) {
+        await InAppUpdate.performImmediateUpdate();
+      }
+    } catch (e) {
+      print('인앱 업데이트 체크 오류: $e');
+      // 필요시 에러 메시지 표시
+    }
+  }
+
+  Future<void> _checkForFlexibleUpdate() async {
+    try {
+      final updateInfo = await InAppUpdate.checkForUpdate();
+      if (updateInfo.updateAvailability == UpdateAvailability.updateAvailable) {
+        await InAppUpdate.startFlexibleUpdate();
+        await InAppUpdate.completeFlexibleUpdate();
+      }
+    } catch (e) {
+      print('인앱 업데이트 체크 오류: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -266,7 +409,7 @@ class HomeScreen extends StatelessWidget {
                                 });
                               }
                             },
-                            child: Text('트레이딩 설정목록', maxLines:1,overflow: TextOverflow.ellipsis,),
+                            child: Text('트레이딩 설정', maxLines:1,overflow: TextOverflow.ellipsis,),
                           ),
                         ),
                         SizedBox(width: 8),
@@ -320,7 +463,7 @@ class HomeScreen extends StatelessWidget {
                                 });
                               }
                             },
-                            child: Text('수익 현황', maxLines:1,overflow: TextOverflow.ellipsis,),
+                            child: Text('미체결 주문목록', maxLines:1,overflow: TextOverflow.ellipsis,),
                           ),
                         ),
                         SizedBox(width: 8),
@@ -345,7 +488,7 @@ class HomeScreen extends StatelessWidget {
                                 });
                               }
                             },
-                            child: Text('손절 현황',maxLines:1,overflow: TextOverflow.ellipsis,),
+                            child: Text('수익 현황',maxLines:1,overflow: TextOverflow.ellipsis,),
                           ),
                         ),
                       ],
