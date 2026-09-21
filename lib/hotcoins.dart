@@ -1,61 +1,34 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart'; // 광고 클릭시 링크 이동용
-import 'config/api_config.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class HotCoin {
-  final String dateTag;
   final String coinName;
-  final int bidAmt;
-  final int askAmt;
-  final int totalAmt;
-  final double amtDiff;
 
-  HotCoin({
-    required this.dateTag,
-    required this.coinName,
-    required this.bidAmt,
-    required this.askAmt,
-    required this.totalAmt,
-    required this.amtDiff,
-  });
+  HotCoin({required this.coinName});
 
-  factory HotCoin.fromJson(Map<String, dynamic> json) {
-    return HotCoin(
-      dateTag: json['dateTag'] as String,
-      coinName: json['coinName'] as String,
-      bidAmt: json['bidAmt'] is int
-          ? json['bidAmt']
-          : int.tryParse(json['bidAmt'].toString()) ?? 0,
-      askAmt: json['askAmt'] is int
-          ? json['askAmt']
-          : int.tryParse(json['askAmt'].toString()) ?? 0,
-      totalAmt: json['totalAmt'] is int
-          ? json['totalAmt']
-          : int.tryParse(json['totalAmt'].toString()) ?? 0,
-      amtDiff: json['amtDiff'] is double
-          ? json['amtDiff']
-          : double.tryParse(json['amtDiff'].toString()) ?? 0.0,
-    );
+  factory HotCoin.fromString(String name) {
+    return HotCoin(coinName: name);
   }
-}
-
-String formatDatetag(String datetag) {
-  return "${datetag.substring(0, 4)}-${datetag.substring(4, 6)}-${datetag.substring(6, 8)} "
-      "${datetag.substring(8, 10)}:${datetag.substring(10, 12)}:${datetag.substring(12, 14)}";
 }
 
 Future<List<HotCoin>> fetchHotCoins() async {
   final response = await http.get(
-    Uri.parse('${ApiConf.baseUrl}/phapp/hotcoinlist'),
+    Uri.parse('http://becog.iptime.org:8088/api/top30coins'),
   );
+
   if (response.statusCode == 200) {
-    List<dynamic> data = json.decode(response.body);
-    return data.map((json) => HotCoin.fromJson(json)).toList();
+    final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+
+    if (data.containsKey('markets') && data['markets'] is List) {
+      List<dynamic> markets = data['markets'];
+      return markets.map((name) => HotCoin.fromString(name.toString())).toList();
+    } else {
+      throw Exception('데이터에 markets 항목이 없습니다.');
+    }
   } else {
-    throw Exception('Failed to load hot coins');
+    throw Exception('Failed to load hot coins: ${response.statusCode}');
   }
 }
 
@@ -68,10 +41,8 @@ class HotCoinsPage extends StatefulWidget {
 
 class _HotCoinsPageState extends State<HotCoinsPage> {
   late Future<List<HotCoin>> hotCoinsFuture;
-  final NumberFormat numberFormat = NumberFormat('#,###');
 
   List<HotCoin> coins = [];
-  int? sortColumnIndex;
   bool sortAscending = true;
 
   @override
@@ -82,61 +53,32 @@ class _HotCoinsPageState extends State<HotCoinsPage> {
       setState(() {
         coins = value;
       });
+    }).catchError((error) {
+      debugPrint("Error fetching coins: $error");
     });
   }
 
-  void onSort(int columnIndex, bool ascending) {
-    setState(() {
-      sortColumnIndex = columnIndex;
-      sortAscending = ascending;
-      switch (columnIndex) {
-        case 0:
-          coins.sort(
-                (a, b) =>
-            ascending
-                ? a.coinName.compareTo(b.coinName)
-                : b.coinName.compareTo(a.coinName),
-          );
-          break;
-        case 1:
-          coins.sort(
-                (a, b) =>
-            ascending
-                ? a.bidAmt.compareTo(b.bidAmt)
-                : b.bidAmt.compareTo(a.bidAmt),
-          );
-          break;
-        case 2:
-          coins.sort(
-                (a, b) =>
-            ascending
-                ? a.askAmt.compareTo(b.askAmt)
-                : b.askAmt.compareTo(a.askAmt),
-          );
-          break;
-        case 3:
-          coins.sort(
-                (a, b) =>
-            ascending
-                ? a.totalAmt.compareTo(b.totalAmt)
-                : b.totalAmt.compareTo(a.totalAmt),
-          );
-          break;
-        case 4:
-          coins.sort(
-                (a, b) =>
-            ascending
-                ? a.amtDiff.compareTo(b.amtDiff)
-                : b.amtDiff.compareTo(a.amtDiff),
-          );
-          break;
+  // 업비트 링크 열기 함수
+  Future<void> _launchUpbit(String marketCode) async {
+    // 업비트 웹 거래소 URL 규칙 적용
+    final String upbitUrl = 'https://upbit.com/exchange?code=CRIX.UPBIT.$marketCode';
+    final Uri url = Uri.parse(upbitUrl);
+
+    try {
+      if (await canLaunchUrl(url)) {
+        // mode: LaunchMode.externalApplication 을 사용하면
+        // 스마트폰에 업비트 앱이 설치되어 있을 경우 앱으로 연결될 확률이 높습니다.
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        debugPrint('Could not launch $upbitUrl');
       }
-    });
+    } catch (e) {
+      debugPrint('Error launching URL: $e');
+    }
   }
 
-  // 광고 배너 위젯
   Widget _buildAdBanner(BuildContext context) {
-    const String adUrl = 'http://www.naver.com'; // 광고 클릭시 이동할 링크
+    const String adUrl = 'http://www.naver.com';
     return GestureDetector(
       onTap: () async {
         if (await canLaunchUrl(Uri.parse(adUrl))) {
@@ -150,7 +92,7 @@ class _HotCoinsPageState extends State<HotCoinsPage> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.campaign, color: Colors.blueAccent, size: 32),
+            const Icon(Icons.campaign, color: Colors.blueAccent, size: 32),
             const SizedBox(width: 10),
             const Text(
               '나만의 광고 배너입니다! 클릭해서 이동',
@@ -171,14 +113,13 @@ class _HotCoinsPageState extends State<HotCoinsPage> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.blueAccent,
-        title: const Text('추천 종목'),
+        title: const Text('추천 종목 (Top 30)'),
         leading: const BackButton(),
       ),
-      backgroundColor: Colors.grey,
+      backgroundColor: Colors.grey[200],
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 날짜 표시 및 테이블
           Expanded(
             child: FutureBuilder<List<HotCoin>>(
               future: hotCoinsFuture,
@@ -191,72 +132,46 @@ class _HotCoinsPageState extends State<HotCoinsPage> {
                   return const Center(child: Text('데이터가 없습니다.'));
                 }
 
-                String formattedDate = '';
-                if (coins.isNotEmpty) {
-                  formattedDate = formatDatetag(coins[0].dateTag);
-                }
-
                 return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (formattedDate.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Text(
-                          '수집 시각: $formattedDate',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
+                    const Padding(
+                      padding: EdgeInsets.all(12.0),
+                      child: Text(
+                        '실시간 트렌드 마켓 (클릭 시 업비트로 이동)',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
+                    ),
                     Expanded(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.vertical,
-                          child: DataTable(
-                            sortColumnIndex: sortColumnIndex,
-                            sortAscending: sortAscending,
-                            columns: [
-                              DataColumn(
-                                label: const Text('종목'),
-                                onSort: (i, asc) => onSort(i, asc),
+                      child: ListView.builder(
+                        itemCount: coins.length,
+                        itemBuilder: (context, index) {
+                          final coin = coins[index];
+                          return Card(
+                            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: Colors.blueAccent,
+                                child: Text(
+                                  '${index + 1}',
+                                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                                ),
                               ),
-                              DataColumn(
-                                label: const Text('매수'),
-                                numeric: true,
-                                onSort: (i, asc) => onSort(i, asc),
+                              title: Text(
+                                coin.coinName,
+                                style: const TextStyle(fontWeight: FontWeight.bold),
                               ),
-                              DataColumn(
-                                label: const Text('매도'),
-                                numeric: true,
-                                onSort: (i, asc) => onSort(i, asc),
-                              ),
-                              DataColumn(
-                                label: const Text('총액'),
-                                numeric: true,
-                                onSort: (i, asc) => onSort(i, asc),
-                              ),
-                              DataColumn(
-                                label: const Text('차이(%)'),
-                                numeric: true,
-                                onSort: (i, asc) => onSort(i, asc),
-                              ),
-                            ],
-                            rows: coins.map((coin) {
-                              return DataRow(
-                                cells: [
-                                  DataCell(Text(coin.coinName)),
-                                  DataCell(Text(numberFormat.format(coin.bidAmt))),
-                                  DataCell(Text(numberFormat.format(coin.askAmt))),
-                                  DataCell(Text(numberFormat.format(coin.totalAmt))),
-                                  DataCell(Text(coin.amtDiff.toStringAsFixed(2))),
-                                ],
-                              );
-                            }).toList(),
-                          ),
-                        ),
+                              trailing: const Icon(Icons.open_in_new, color: Colors.grey, size: 20),
+                              // 항목 클릭 시 업비트 함수 호출
+                              onTap: () {
+                                _launchUpbit(coin.coinName);
+                              },
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -264,7 +179,6 @@ class _HotCoinsPageState extends State<HotCoinsPage> {
               },
             ),
           ),
-          // 광고 배너
           _buildAdBanner(context),
         ],
       ),

@@ -542,7 +542,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 });
                               }
                             },
-                            child: Text('설정',maxLines:1,overflow: TextOverflow.ellipsis,),
+                            child: Text('앱 설정',maxLines:1,overflow: TextOverflow.ellipsis,),
                           ),
                         ),
                       ],
