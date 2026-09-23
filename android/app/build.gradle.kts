@@ -1,6 +1,5 @@
 plugins {
     id("com.android.application")
-    id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -10,7 +9,7 @@ dependencies {
     // Add Firebase dependencies as needed
     implementation("com.google.firebase:firebase-analytics")
     // implementation("com.google.firebase:firebase-auth") // 예시
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
 android {
     namespace = "kr.swcore.mtpond"

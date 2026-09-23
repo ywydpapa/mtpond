@@ -11,7 +11,6 @@ import 'tradelogs.dart';
 import 'setting.dart';
 import 'margins.dart';
 import 'losscut.dart';
-import 'package:flutter/services.dart'; // 추가
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -24,7 +23,6 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 FlutterLocalNotificationsPlugin();
-
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -89,7 +87,8 @@ void main() async {
       android: initializationSettingsAndroid,
       iOS: initializationSettingsIOS,
     );
-    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+    await flutterLocalNotificationsPlugin.initialize(
+        settings: initializationSettings);
     print('로컬 알림 초기화 완료');
   } catch (e, stack) {
     print('로컬 알림 초기화 실패: $e\n$stack');
@@ -98,7 +97,6 @@ void main() async {
   print('runApp 호출');
   runApp(MyApp());
 }
-
 
 void subscribeToTopics(String regionNo, String clubNo) async {
   FirebaseMessaging messaging = FirebaseMessaging.instance;
@@ -139,7 +137,8 @@ class MyHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
     return super.createHttpClient(context)
-      ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+      ..badCertificateCallback =
+          (X509Certificate cert, String host, int port) => true;
   }
 }
 
@@ -150,17 +149,20 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Mountain Pond for Upbit',
-      theme: ThemeData(primarySwatch: Colors.blue, fontFamily: 'NotoSansKR',),
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        fontFamily: 'NotoSansKR',
+      ),
       initialRoute: '/login',
       routes: {
         '/login': (context) => LoginScreen(),
         '/': (context) => HomeScreen(),
-        '/setting': (context) => SettingPage(),     // 예시: 트레이딩 설정목록
-        '/tradelogs': (context) => TradeLogsPage(),// 예시: 거래 내역
-        '/hotcoins': (context) => HotCoinsPage(),      // 예시: 추천 종목
+        '/setting': (context) => SettingPage(), // 예시: 트레이딩 설정목록
+        '/tradelogs': (context) => TradeLogsPage(), // 지갑내역
+        '/hotcoins': (context) => HotCoinsPage(), // 예시: 추천 종목
         '/tradeset': (context) => TradeSetPage(),
-        '/margins': (context) => MarginsPage(),      // 설정
-        '/losscut': (context) => LosscutPage(),      // 설정// 설정
+        '/margins': (context) => MarginsPage(), // 설정
+        '/losscut': (context) => LosscutPage(), // 설정
       },
     );
   }
@@ -198,7 +200,6 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (response.statusCode == 200) {
-        // 1. response.bodyBytes를 사용해서 UTF-8로 직접 디코딩
         final decodedBody = utf8.decode(response.bodyBytes);
         final data = json.decode(decodedBody);
 
@@ -210,14 +211,13 @@ class _LoginScreenState extends State<LoginScreen> {
             _errorMessage = '';
           });
 
-
           Navigator.pushReplacementNamed(
             context,
             '/',
             arguments: {
               'userNo': _userNo,
               'userName': _userName,
-              'seccode': _seccode,
+              'seccode': _seccode, // 로그인 성공 시 seccode 저장 후 전달
             },
           );
         } else if (data.containsKey('error')) {
@@ -249,7 +249,7 @@ class _LoginScreenState extends State<LoginScreen> {
         title: Text('Mt. CoinPond for Upbit'),
       ),
       backgroundColor: Colors.blueAccent,
-      body: SafeArea( // <-- SafeArea로 감싸기
+      body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
@@ -277,7 +277,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   labelText: '암호',
                   border: OutlineInputBorder(),
                 ),
-                obscureText: true, // <-- 추가!
+                obscureText: true,
                 keyboardType: TextInputType.text,
               ),
               SizedBox(height: 8),
@@ -301,7 +301,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-
   @override
   void initState() {
     super.initState();
@@ -316,7 +315,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       print('인앱 업데이트 체크 오류: $e');
-      // 필요시 에러 메시지 표시
     }
   }
 
@@ -332,12 +330,23 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // 공통 로그인 만료 처리 함수
+  void _handleSessionExpired() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('로그인세션이 만료되었습니다. 다시 로그인해야 합니다.')),
+    );
+    Future.delayed(Duration(seconds: 2), () {
+      Navigator.pushReplacementNamed(context, '/login');
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final args =
+    ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     final String? userNo = args?['userNo'];
     final String? userName = args?['userName'];
-    final String? seccode = args?['seccode'];
+    final String? seccode = args?['seccode']; // 홈 화면에서 seccode 받기
 
     return Scaffold(
       appBar: AppBar(
@@ -354,7 +363,8 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0, vertical: 16.0),
                 child: Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -391,50 +401,50 @@ class _HomeScreenState extends State<HomeScreen> {
                         Expanded(
                           child: ElevatedButton(
                             onPressed: () {
-                              if (userNo != null){
+                              if (userNo != null) {
                                 Navigator.pushNamed(
                                   context,
                                   '/tradeset',
                                   arguments: {
                                     'userNo': userNo,
                                     'userName': userName,
+                                    'setKey': seccode, // 추가
                                   },
                                 );
                               } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('로그인세션이 만료되었습니다. 다시 로그인해야 합니다.')),
-                                );
-                                Future.delayed(Duration(seconds: 2), () {
-                                  Navigator.pushReplacementNamed(context, '/login');
-                                });
+                                _handleSessionExpired();
                               }
                             },
-                            child: Text('트레이딩 설정', maxLines:1,overflow: TextOverflow.ellipsis,),
+                            child: Text(
+                              '트레이딩 설정',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ),
                         SizedBox(width: 8),
                         Expanded(
                           child: ElevatedButton(
                             onPressed: () {
-                              if (userNo != null){
+                              if (userNo != null) {
                                 Navigator.pushNamed(
                                   context,
                                   '/tradelogs',
                                   arguments: {
                                     'userNo': userNo,
                                     'userName': userName,
+                                    'setKey': seccode, // 👈 핵심 추가 부분: tradelogs로 setKey(seccode) 전달
                                   },
                                 );
                               } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('로그인세션이 만료되었습니다. 다시 로그인해야 합니다.')),
-                                );
-                                Future.delayed(Duration(seconds: 2), () {
-                                  Navigator.pushReplacementNamed(context, '/login');
-                                });
+                                _handleSessionExpired();
                               }
                             },
-                            child: Text('거래 내역',maxLines:1,overflow: TextOverflow.ellipsis,),
+                            child: Text(
+                              '나의 지갑 내역',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ),
                       ],
@@ -445,25 +455,25 @@ class _HomeScreenState extends State<HomeScreen> {
                         Expanded(
                           child: ElevatedButton(
                             onPressed: () {
-                              if (userNo!= null){
+                              if (userNo != null) {
                                 Navigator.pushNamed(
                                   context,
                                   '/margins',
                                   arguments: {
                                     'userNo': userNo,
                                     'userName': userName,
+                                    'setKey': seccode, // 추가
                                   },
                                 );
                               } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('로그인세션이 만료되었습니다. 다시 로그인해야 합니다.')),
-                                );
-                                Future.delayed(Duration(seconds: 2), () {
-                                  Navigator.pushReplacementNamed(context, '/login');
-                                });
+                                _handleSessionExpired();
                               }
                             },
-                            child: Text('미체결 주문목록', maxLines:1,overflow: TextOverflow.ellipsis,),
+                            child: Text(
+                              '미체결 주문목록',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ),
                         SizedBox(width: 8),
@@ -477,18 +487,18 @@ class _HomeScreenState extends State<HomeScreen> {
                                   arguments: {
                                     'userNo': userNo,
                                     'userName': userName,
+                                    'setKey': seccode, // 추가
                                   },
                                 );
                               } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('로그인세션이 만료되었습니다. 다시 로그인해야 합니다.')),
-                                );
-                                Future.delayed(Duration(seconds: 2), () {
-                                  Navigator.pushReplacementNamed(context, '/login');
-                                });
+                                _handleSessionExpired();
                               }
                             },
-                            child: Text('수익 현황',maxLines:1,overflow: TextOverflow.ellipsis,),
+                            child: Text(
+                              '수익 현황',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ),
                       ],
@@ -499,25 +509,25 @@ class _HomeScreenState extends State<HomeScreen> {
                         Expanded(
                           child: ElevatedButton(
                             onPressed: () {
-                              if (userNo!= null){
+                              if (userNo != null) {
                                 Navigator.pushNamed(
                                   context,
                                   '/hotcoins',
                                   arguments: {
                                     'userNo': userNo,
                                     'userName': userName,
+                                    'setKey': seccode, // 추가
                                   },
                                 );
                               } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('로그인세션이 만료되었습니다. 다시 로그인해야 합니다.')),
-                                );
-                                Future.delayed(Duration(seconds: 2), () {
-                                  Navigator.pushReplacementNamed(context, '/login');
-                                });
+                                _handleSessionExpired();
                               }
                             },
-                            child: Text('추천 종목', maxLines:1,overflow: TextOverflow.ellipsis,),
+                            child: Text(
+                              '추천 종목',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ),
                         SizedBox(width: 8),
@@ -531,18 +541,18 @@ class _HomeScreenState extends State<HomeScreen> {
                                   arguments: {
                                     'userNo': userNo,
                                     'userName': userName,
+                                    'setKey': seccode, // 추가
                                   },
                                 );
                               } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('로그인세션이 만료되었습니다. 다시 로그인해야 합니다.')),
-                                );
-                                Future.delayed(Duration(seconds: 2), () {
-                                  Navigator.pushReplacementNamed(context, '/login');
-                                });
+                                _handleSessionExpired();
                               }
                             },
-                            child: Text('앱 설정',maxLines:1,overflow: TextOverflow.ellipsis,),
+                            child: Text(
+                              '앱 설정',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ),
                       ],

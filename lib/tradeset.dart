@@ -101,28 +101,48 @@ class _TradeSetPageState extends State<TradeSetPage> {
 
   void _toggleYN(String key, bool value) async {
     if (setup == null) return;
+
+    // 1. 낙관적 업데이트 (UI를 먼저 변경하여 반응성을 높임)
     setState(() {
       setup![key] = _boolToYN(value);
     });
 
-    // TODO: 백엔드 업데이트 API가 정해지면 연결
-    // try {
-    //   final url = Uri.parse('${ApiConf.baseUrl}/api/mtpondsetup/update');
-    //   final resp = await http.post(url,
-    //     headers: {'Content-Type': 'application/json'},
-    //     body: json.encode({'userNo': userNo, key: _boolToYN(value)}),
-    //   );
-    //   if (resp.statusCode != 200) throw Exception('업데이트 실패: ${resp.statusCode}');
-    // } catch (e) {
-    //   // 롤백
-    //   setState(() {
-    //     setup![key] = _boolToYN(!value);
-    //   });
-    //   if (mounted) {
-    //     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('업데이트 실패: $e')));
-    //   }
-    // }
+    // 2. '트레이딩 활성화(activeYN)' 버튼인 경우 백엔드 API 호출
+    if (key == 'activeYN') {
+      final activeStr = _boolToYN(value); // 'Y' 또는 'N'
+      final url = Uri.parse('${ApiConf.baseUrl}/api/mtpondsetonoff/$userNo/$activeStr');
+
+      try {
+        final resp = await http.post(
+          url,
+          headers: {'Accept': 'application/json'},
+        );
+
+        if (resp.statusCode != 200) {
+          throw Exception('업데이트 실패: ${resp.statusCode}');
+        }
+
+        // 응답이 정상(200)이면 성공 처리 (추가 작업 불필요)
+        // final decodedText = utf8.decode(resp.bodyBytes);
+        // final parsed = json.decode(decodedText);
+
+      } catch (e) {
+        // 3. API 호출 실패 시 원래 상태로 롤백
+        setState(() {
+          setup![key] = _boolToYN(!value);
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('트레이딩 활성화 변경 실패: $e')),
+          );
+        }
+      }
+    } else {
+      // TODO: 다른 스위치(tickYN, martinYN 등)를 위한 백엔드 업데이트 로직 추가
+      // 예: 다른 설정들은 일괄 저장 API를 사용하거나 각각의 API를 호출
+    }
   }
+
 
   Widget _rowLabelValue({
     required String label,
