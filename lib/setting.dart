@@ -11,7 +11,9 @@ class SettingPage extends StatefulWidget {
 class _SettingPageState extends State<SettingPage> {
   final TextEditingController _key1Controller = TextEditingController();
   final TextEditingController _key2Controller = TextEditingController();
+
   bool _notificationEnabled = false;
+  bool _autoLoginEnabled = false; // 자동 로그인 상태 변수 추가
 
   @override
   void initState() {
@@ -25,6 +27,7 @@ class _SettingPageState extends State<SettingPage> {
       _key1Controller.text = prefs.getString('upbit_access_key') ?? '';
       _key2Controller.text = prefs.getString('upbit_secret_key') ?? '';
       _notificationEnabled = prefs.getBool('notification_enabled') ?? false;
+      _autoLoginEnabled = prefs.getBool('auto_login_enabled') ?? false; // 자동 로그인 설정 불러오기
     });
   }
 
@@ -32,9 +35,11 @@ class _SettingPageState extends State<SettingPage> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('upbit_access_key', _key1Controller.text);
     await prefs.setString('upbit_secret_key', _key2Controller.text);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Upbit API 키가 저장되었습니다.')),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Upbit API 키가 저장되었습니다.')),
+      );
+    }
   }
 
   Future<void> _saveNotification(bool value) async {
@@ -42,15 +47,27 @@ class _SettingPageState extends State<SettingPage> {
     await prefs.setBool('notification_enabled', value);
   }
 
+  // 자동 로그인 설정 저장 함수
+  Future<void> _saveAutoLogin(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('auto_login_enabled', value);
+
+    // 자동 로그인을 끄면 저장되어 있던 아이디와 비밀번호 정보도 삭제합니다.
+    if (!value) {
+      await prefs.remove('saved_username');
+      await prefs.remove('saved_password');
+    }
+  }
+
   void _changePassword() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('암호 변경'),
-        content: Text('암호 변경 기능을 구현하세요.'),
+        title: const Text('암호 변경'),
+        content: const Text('암호 변경 기능을 구현하세요.'),
         actions: [
           TextButton(
-            child: Text('닫기'),
+            child: const Text('닫기'),
             onPressed: () => Navigator.of(context).pop(),
           ),
         ],
@@ -71,7 +88,7 @@ class _SettingPageState extends State<SettingPage> {
       appBar: AppBar(
         backgroundColor: Colors.blueAccent,
         title: const Text('설정'),
-        leading: BackButton(),
+        leading: const BackButton(),
       ),
       backgroundColor: Colors.blueAccent,
       body: Padding(
@@ -85,48 +102,66 @@ class _SettingPageState extends State<SettingPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Upbit API Key', style: TextStyle(fontWeight: FontWeight.bold)),
-                    SizedBox(height: 8),
+                    const Text('Upbit API Key', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
                     TextField(
                       controller: _key1Controller,
-                      decoration: InputDecoration(
+                      decoration: const InputDecoration(
                         labelText: 'Access Key',
                       ),
                     ),
-                    SizedBox(height: 8),
+                    const SizedBox(height: 8),
                     TextField(
                       controller: _key2Controller,
-                      decoration: InputDecoration(
+                      decoration: const InputDecoration(
                         labelText: 'Secret Key',
                       ),
                       obscureText: true,
                     ),
-                    SizedBox(height: 8),
+                    const SizedBox(height: 8),
                     Align(
                       alignment: Alignment.centerRight,
                       child: ElevatedButton(
                         onPressed: _saveUpbitKeys,
-                        child: Text('저장'),
+                        child: const Text('저장'),
                       ),
                     ),
                   ],
                 ),
               ),
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
+
+            // 자동 로그인 설정 영역 (추가됨)
+            Card(
+              child: SwitchListTile(
+                title: const Text('자동 로그인'),
+                subtitle: const Text('앱 실행 시 자동으로 로그인합니다.'),
+                value: _autoLoginEnabled,
+                onChanged: (value) {
+                  setState(() {
+                    _autoLoginEnabled = value;
+                  });
+                  _saveAutoLogin(value);
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+
             // 암호 변경 영역
             Card(
               child: ListTile(
-                title: Text('암호 변경'),
-                trailing: Icon(Icons.arrow_forward_ios),
+                title: const Text('암호 변경'),
+                trailing: const Icon(Icons.arrow_forward_ios),
                 onTap: _changePassword,
               ),
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
+
             // 알림 설정 영역
             Card(
               child: SwitchListTile(
-                title: Text('알림 설정'),
+                title: const Text('알림 설정'),
                 value: _notificationEnabled,
                 onChanged: (value) {
                   setState(() {

@@ -183,6 +183,31 @@ class _LoginScreenState extends State<LoginScreen> {
   String _userName = '';
   String _seccode = '';
 
+  // 1. initState 추가: 앱이 켜질 때 자동 로그인 체크
+  @override
+  void initState() {
+    super.initState();
+    _checkAutoLogin();
+  }
+
+  // 2. 자동 로그인 확인 함수
+  Future<void> _checkAutoLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    final autoLoginEnabled = prefs.getBool('auto_login_enabled') ?? false;
+
+    if (autoLoginEnabled) {
+      final savedId = prefs.getString('saved_username');
+      final savedPw = prefs.getString('saved_password');
+
+      if (savedId != null && savedPw != null && savedId.isNotEmpty && savedPw.isNotEmpty) {
+        // 저장된 정보가 있으면 텍스트 필드에 채우고 바로 로그인 실행
+        _usernameController.text = savedId;
+        _userpassController.text = savedPw;
+        _login();
+      }
+    }
+  }
+
   Future<void> _login() async {
     final phoneno = _usernameController.text;
     final userpass = _userpassController.text;
@@ -211,13 +236,21 @@ class _LoginScreenState extends State<LoginScreen> {
             _errorMessage = '';
           });
 
+          // 3. 로그인 성공 시, 자동 로그인 설정이 켜져있다면 아이디/비밀번호 저장
+          final prefs = await SharedPreferences.getInstance();
+          final autoLoginEnabled = prefs.getBool('auto_login_enabled') ?? false;
+          if (autoLoginEnabled) {
+            await prefs.setString('saved_username', phoneno);
+            await prefs.setString('saved_password', userpass);
+          }
+
           Navigator.pushReplacementNamed(
             context,
             '/',
             arguments: {
               'userNo': _userNo,
               'userName': _userName,
-              'seccode': _seccode, // 로그인 성공 시 seccode 저장 후 전달
+              'seccode': _seccode,
             },
           );
         } else if (data.containsKey('error')) {
@@ -433,7 +466,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   arguments: {
                                     'userNo': userNo,
                                     'userName': userName,
-                                    'setKey': seccode, // 👈 핵심 추가 부분: tradelogs로 setKey(seccode) 전달
+                                    'setKey': seccode,
                                   },
                                 );
                               } else {
